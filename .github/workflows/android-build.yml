@@ -1,0 +1,63 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main" ]    # أو الفرع الذي تريده
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) سحب كود المشروع
+      - uses: actions/checkout@v3
+
+      # 2) إعداد الجافا بإصدار مناسب (17 أو 11 أو 8 حسب مشروعك)
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # 3) تثبيت أدوات أندرويد (Android SDK) وإضافة منصات البناء
+      # هناك طرق كثيرة؛ منها أوامر sdkmanager مباشرة
+      - name: Install Android SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes wget unzip
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
+          # حمّل أدوات سطر الأوامر (رابط من موقع جوجل)
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O tools.zip
+          unzip tools.zip
+          # ننشئ فولدر باسم latest وننقل الملفات إليه
+          mkdir latest
+          mv cmdline-tools/* latest
+          # اضبط متغيرات البيئة
+          echo "export ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "export ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "export PATH=$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
+
+      # نجبر GitHub Actions على تحميل متغيرات البيئة من الخطوة السابقة
+      - name: Load env
+        run: source $GITHUB_ENV
+
+      # 4) قبول رخص أندرويد (بدونها سيفشل sdkmanager)
+      - name: Accept licenses
+        run: |
+          yes | sdkmanager --licenses
+
+      # 5) تثبيت ما تحتاجه من منصات وأدوات (اختياري)
+      - name: Install build tools and platforms
+        run: |
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      # 6) اجعل gradlew قابلاً للتنفيذ
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # 7) تنفيذ البناء (مثلاً assembleDebug أو assembleRelease)
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
